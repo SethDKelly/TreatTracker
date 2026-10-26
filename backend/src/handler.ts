@@ -116,7 +116,11 @@ async function listEntries(userSub: string) {
     createdAt: fieldString(r[5]),
   }));
 
-  const total = entries.reduce((sum, e) => sum + e.count, 0);
+  const sumRows = await execute(
+    `SELECT COALESCE(SUM(count), 0)::bigint FROM treat_counts WHERE user_sub = :sub`,
+    [strParam("sub", userSub)],
+  );
+  const total = fieldLong(sumRows[0]?.[0]) ?? 0;
   return { entries, total };
 }
 
