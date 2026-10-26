@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) or set via CI variables.
+
+aws_region  = "us-east-2"
+environment = "dev"
+name_prefix = "treattracker-dev"
+
+# Optional custom DNS — leave blank to use the CloudFront domain.
+# domain_name    = "treats.example.com"
+# hosted_zone_id = "ZXXXXXXXXXXXXX"
+
+db_name        = "treattracker"
+aurora_min_acu = 0.5
+aurora_max_acu = 2
