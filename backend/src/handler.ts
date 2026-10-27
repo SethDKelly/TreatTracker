@@ -14,16 +14,73 @@ import {
 
 type Claims = { sub: string; email?: string };
 
+const corsHeaders = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization,content-type",
+  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+};
+
 function json(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
   return {
     statusCode,
     headers: {
       "content-type": "application/json",
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "authorization,content-type",
-      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+      ...corsHeaders,
     },
     body: JSON.stringify(body),
+  };
+}
+
+function csvEscape(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+async function exportEntriesCsv(): Promise<APIGatewayProxyResultV2> {
+  // Anonymized export: entry UUID + opaque user_id (cognito_sub). Never include email.
+  const rows = await execute(
+    `SELECT id::text, user_sub, count, start_at::text, end_at::text, recorded_at::text, created_at::text
+     FROM treat_counts
+     ORDER BY recorded_at ASC
+     LIMIT 10000`,
+  );
+
+  const header = [
+    "id",
+    "user_id",
+    "count",
+    "start_at",
+    "end_at",
+    "recorded_at",
+    "created_at",
+  ];
+  const lines = [header.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        fieldString(r[0]) ?? "",
+        fieldString(r[1]) ?? "",
+        String(fieldLong(r[2]) ?? 0),
+        fieldString(r[3]) ?? "",
+        fieldString(r[4]) ?? "",
+        fieldString(r[5]) ?? "",
+        fieldString(r[6]) ?? "",
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+
+  return {
+    statusCode: 200,
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": 'attachment; filename="treattracker-entries.csv"',
+      ...corsHeaders,
+    },
+    body: lines.join("\n"),
   };
 }
 
@@ -193,11 +250,7 @@ async function deleteEntry(userSub: string, id: string) {
   }
   return {
     statusCode: 204,
-    headers: {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "authorization,content-type",
-      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-    },
+    headers: { ...corsHeaders },
   };
 }
 
@@ -221,6 +274,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (method === "GET" && path === "/entries") {
       const data = await listEntries(claims.sub);
       return json(200, data);
+    }
+
+    if (method === "GET" && (path === "/export.csv" || path === "/export")) {
+      return await exportEntriesCsv();
     }
 
     if (method === "POST" && path === "/entries") {

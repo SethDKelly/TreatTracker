@@ -66,3 +66,24 @@ export function createEntry(body: {
 export function deleteEntry(id: string): Promise<void> {
   return request<void>(`/entries/${id}`, { method: "DELETE" });
 }
+
+export async function downloadEntriesCsv(): Promise<void> {
+  if (!apiUrl) {
+    throw new Error("VITE_API_URL is not configured");
+  }
+  const headers = await authHeaders();
+  const res = await fetch(`${apiUrl}/export.csv`, { headers });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error || `Download failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "treattracker-entries.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

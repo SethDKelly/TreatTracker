@@ -56,7 +56,7 @@ resource "aws_route53_record" "cert_validation" {
   } : {}
 
   allow_overwrite = true
-  zone_id         = var.hosted_zone_id
+  zone_id         = local.hosted_zone_id
   name            = each.value.name
   type            = each.value.type
   ttl             = 60
@@ -159,7 +159,7 @@ resource "aws_s3_bucket_policy" "spa" {
 resource "aws_route53_record" "spa_a" {
   count = local.use_custom_domain ? 1 : 0
 
-  zone_id = var.hosted_zone_id
+  zone_id = local.hosted_zone_id
   name    = var.domain_name
   type    = "A"
 
@@ -173,7 +173,7 @@ resource "aws_route53_record" "spa_a" {
 resource "aws_route53_record" "spa_aaaa" {
   count = local.use_custom_domain ? 1 : 0
 
-  zone_id = var.hosted_zone_id
+  zone_id = local.hosted_zone_id
   name    = var.domain_name
   type    = "AAAA"
 

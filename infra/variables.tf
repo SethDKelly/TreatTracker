@@ -23,13 +23,19 @@ variable "name_prefix" {
 }
 
 variable "domain_name" {
-  description = "Public hostname for the SPA (e.g. treats.example.com). Leave empty to use CloudFront domain only."
+  description = "Public hostname for the SPA under SkellyHouse DNS."
   type        = string
-  default     = ""
+  default     = "treattracker.skellyhouse.com"
+}
+
+variable "hosted_zone_name" {
+  description = "Route53 public hosted zone name used when hosted_zone_id is empty."
+  type        = string
+  default     = "skellyhouse.com"
 }
 
 variable "hosted_zone_id" {
-  description = "Route53 hosted zone ID for domain_name. Required when domain_name is set."
+  description = "Optional explicit Route53 hosted zone ID. When empty, looked up by hosted_zone_name."
   type        = string
   default     = ""
 }

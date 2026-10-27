@@ -1,6 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { signOut } from "aws-amplify/auth";
-import { createEntry, deleteEntry, listEntries, type Entry } from "./api";
+import {
+  createEntry,
+  deleteEntry,
+  downloadEntriesCsv,
+  listEntries,
+  type Entry,
+} from "./api";
 
 type Props = {
   email: string | undefined;
@@ -93,6 +99,18 @@ export default function Tracker({ email, onSignedOut }: Props) {
     onSignedOut();
   }
 
+  async function onDownload() {
+    setBusy(true);
+    setError(null);
+    try {
+      await downloadEntriesCsv();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="panel tracker">
       <header className="tracker-head">
@@ -100,9 +118,14 @@ export default function Tracker({ email, onSignedOut }: Props) {
           <p className="brand">TreatTracker</p>
           <p className="subtle">{email ?? "Signed in"}</p>
         </div>
-        <button type="button" className="ghost" onClick={() => void handleSignOut()}>
-          Sign out
-        </button>
+        <div className="header-actions">
+          <button type="button" className="ghost" disabled={busy} onClick={() => void onDownload()}>
+            Download CSV
+          </button>
+          <button type="button" className="ghost" onClick={() => void handleSignOut()}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <div className="total-block" aria-live="polite">

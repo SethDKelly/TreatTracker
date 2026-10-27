@@ -1,12 +1,13 @@
-# Copy to terraform.tfvars (gitignored) or set via CI variables.
+# Copy to terraform.tfvars (gitignored) or set via CI / defaults.
 
 aws_region  = "us-east-2"
 environment = "dev"
 name_prefix = "treattracker-dev"
 
-# Optional custom DNS — leave blank to use the CloudFront domain.
-# domain_name    = "treats.example.com"
-# hosted_zone_id = "ZXXXXXXXXXXXXX"
+# SkellyHouse DNS (defaults also set in variables.tf)
+domain_name      = "treattracker.skellyhouse.com"
+hosted_zone_name = "skellyhouse.com"
+# hosted_zone_id = "ZXXXXXXXXXXXXX"  # optional; looked up from hosted_zone_name when empty
 
 db_name        = "treattracker"
 aurora_min_acu = 0.5

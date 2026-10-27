@@ -39,14 +39,13 @@ Push to `dev` or run **Deploy to dev** via `workflow_dispatch`. The workflow:
 3. Builds and packages the Lambda
 4. Builds the SPA and syncs to S3 / invalidates CloudFront
 
-Copy `infra/terraform.tfvars.example` → `infra/terraform.tfvars` (or set GitHub Variables `DOMAIN_NAME` / `HOSTED_ZONE_ID`) for custom DNS.
+DNS defaults to **`treattracker.skellyhouse.com`** in the `skellyhouse.com` hosted zone (looked up by name). Override with GitHub Variables `DOMAIN_NAME`, `HOSTED_ZONE_NAME`, or `HOSTED_ZONE_ID` if needed.
 
 ### First deploy checklist
 
-1. Merge/apply [aws-backbone PR #32](https://github.com/SethDKelly/aws-backbone/pull/32) via MFA-backed `terraform-bootstrap` (S-40: merge alone does not apply IAM).
-2. Set optional GitHub Actions variables `DOMAIN_NAME` and `HOSTED_ZONE_ID`.
-3. Run **Deploy to dev** (`workflow_dispatch` or push to `main`/`dev`).
-4. Open the printed `app_url`, request an email OTP, submit a quick entry and a time-range entry, confirm the total updates.
+1. Ensure aws-backbone trusts TreatTracker OIDC (immutable subject) and MFA-apply is live.
+2. Run **Deploy to dev** (`workflow_dispatch` or push to `main`/`dev`).
+3. Open `https://treattracker.skellyhouse.com` (or the printed `app_url`), request an email OTP, submit entries, confirm total + **Download CSV**.
 
 Schema tables are created automatically on the first authenticated API request.
 
@@ -57,3 +56,4 @@ Schema tables are created automatically on the first authenticated API request.
 | `GET` | `/entries` | Cognito JWT | List entries + total for caller |
 | `POST` | `/entries` | Cognito JWT | Create quick or range entry |
 | `DELETE` | `/entries/{id}` | Cognito JWT | Delete own entry |
+| `GET` | `/export.csv` | Cognito JWT | Download anonymized CSV (`id`, `user_id`, counts/timestamps — **no emails**) |

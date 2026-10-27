@@ -50,7 +50,10 @@ jobs:
       - name: Terraform init / apply
         working-directory: ${{ env.TF_DIR }}
         env:
-          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+          # Defaults in variables.tf: treattracker.skellyhouse.com / skellyhouse.com
+          # Override with repo Variables when needed.
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME || 'treattracker.skellyhouse.com' }}
+          TF_VAR_hosted_zone_name: ${{ vars.HOSTED_ZONE_NAME || 'skellyhouse.com' }}
           TF_VAR_hosted_zone_id: ${{ vars.HOSTED_ZONE_ID }}
         run: |
           terraform init -input=false
