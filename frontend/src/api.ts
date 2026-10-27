@@ -7,6 +7,8 @@ export type Geo = {
   longitude?: number | null;
 };
 
+export type ClosedReason = "closed" | "out_of_candy";
+
 export type Entry = {
   id: string;
   count: number;
@@ -19,8 +21,10 @@ export type Entry = {
 };
 
 export type HouseStatus = {
+  lightsOn: boolean;
   lightsOnAt: string | null;
   lightsOffAt: string | null;
+  closedReason: string | null;
   latitude?: number | null;
   longitude?: number | null;
 };
@@ -106,8 +110,18 @@ export function setLightsOn(geo: Geo = {}): Promise<{ house: HouseStatus }> {
   });
 }
 
-export function setLightsOff(geo: Geo = {}): Promise<{ house: HouseStatus }> {
+export function setLightsOff(
+  geo: Geo = {},
+  reason: ClosedReason = "closed",
+): Promise<{ house: HouseStatus }> {
   return request<{ house: HouseStatus }>("/house/lights-off", {
+    method: "POST",
+    body: JSON.stringify({ ...geo, reason }),
+  });
+}
+
+export function setOutOfCandy(geo: Geo = {}): Promise<{ house: HouseStatus }> {
+  return request<{ house: HouseStatus }>("/house/out-of-candy", {
     method: "POST",
     body: JSON.stringify(geo),
   });

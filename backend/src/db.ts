@@ -65,6 +65,10 @@ export function doubleParam(name: string, value: number | null | undefined): Sql
   return { name, value: { doubleValue: value } };
 }
 
+export function boolParam(name: string, value: boolean): SqlParameter {
+  return { name, value: { booleanValue: value } };
+}
+
 export function fieldString(field: Field | undefined): string | null {
   if (!field || field.isNull) return null;
   return field.stringValue ?? null;
@@ -81,4 +85,10 @@ export function fieldDouble(field: Field | undefined): number | null {
   if (typeof field.doubleValue === "number") return field.doubleValue;
   if (typeof field.longValue === "number") return field.longValue;
   return null;
+}
+
+export function fieldBoolean(field: Field | undefined): boolean {
+  if (!field || field.isNull) return false;
+  if (typeof field.booleanValue === "boolean") return field.booleanValue;
+  return false;
 }

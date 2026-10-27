@@ -8,6 +8,7 @@ import {
   listEntries,
   setLightsOff,
   setLightsOn,
+  setOutOfCandy,
   type Entry,
   type HouseStatus,
 } from "./api";
@@ -15,6 +16,13 @@ import {
 type Props = {
   email: string | undefined;
   onSignedOut: () => void;
+};
+
+const emptyHouse: HouseStatus = {
+  lightsOn: false,
+  lightsOnAt: null,
+  lightsOffAt: null,
+  closedReason: null,
 };
 
 function toLocalInputValue(d: Date): string {
@@ -35,6 +43,12 @@ function formatWhen(iso: string): string {
   }
 }
 
+function closedReasonLabel(reason: string | null): string {
+  if (reason === "out_of_candy") return "Ran out of candy";
+  if (reason === "closed") return "House closed";
+  return "Lights off";
+}
+
 export default function Tracker({ email, onSignedOut }: Props) {
   const [mode, setMode] = useState<"quick" | "range">("quick");
   const [count, setCount] = useState("1");
@@ -42,7 +56,7 @@ export default function Tracker({ email, onSignedOut }: Props) {
   const [endAt, setEndAt] = useState(() => toLocalInputValue(new Date()));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [total, setTotal] = useState(0);
-  const [house, setHouse] = useState<HouseStatus>({ lightsOnAt: null, lightsOffAt: null });
+  const [house, setHouse] = useState<HouseStatus>(emptyHouse);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +64,7 @@ export default function Tracker({ email, onSignedOut }: Props) {
     const data = await listEntries();
     setEntries(data.entries);
     setTotal(data.total);
-    setHouse(data.house ?? { lightsOnAt: null, lightsOffAt: null });
+    setHouse(data.house ?? emptyHouse);
   }
 
   useEffect(() => {
@@ -89,12 +103,26 @@ export default function Tracker({ email, onSignedOut }: Props) {
     }
   }
 
-  async function onLights(which: "on" | "off") {
+  async function onToggleLights() {
     setBusy(true);
     setError(null);
     try {
       const geo = await getDeviceGeo();
-      const res = which === "on" ? await setLightsOn(geo) : await setLightsOff(geo);
+      const res = house.lightsOn ? await setLightsOff(geo, "closed") : await setLightsOn(geo);
+      setHouse(res.house);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update lights");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onOutOfCandy() {
+    setBusy(true);
+    setError(null);
+    try {
+      const geo = await getDeviceGeo();
+      const res = await setOutOfCandy(geo);
       setHouse(res.house);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update house status");
@@ -133,8 +161,7 @@ export default function Tracker({ email, onSignedOut }: Props) {
     }
   }
 
-  const open = Boolean(house.lightsOnAt);
-  const closed = Boolean(house.lightsOffAt);
+  const lightsOn = Boolean(house.lightsOn);
 
   return (
     <section className="panel tracker">
@@ -153,40 +180,45 @@ export default function Tracker({ email, onSignedOut }: Props) {
         </div>
       </header>
 
-      <div className={`house-status ${open && !closed ? "open" : ""} ${closed ? "closed" : ""}`}>
-        <p className="house-title">House status</p>
-        <div className="house-times">
-          <div>
-            <span className="house-label">Lights on</span>
-            <span className="house-value">
-              {house.lightsOnAt ? formatWhen(house.lightsOnAt) : "Not yet"}
-            </span>
-          </div>
-          <div>
-            <span className="house-label">Lights off</span>
-            <span className="house-value">
-              {house.lightsOffAt ? formatWhen(house.lightsOffAt) : "Still open"}
-            </span>
-          </div>
+      <div
+        className={`house-status ${lightsOn ? "on" : "off"}`}
+        role="status"
+        aria-live="polite"
+        aria-label={lightsOn ? "Lights on" : "Lights off"}
+      >
+        <div className="lights-badge">
+          <span className="lights-dot" aria-hidden="true" />
+          <span className="lights-state">{lightsOn ? "Lights on" : "Lights off"}</span>
         </div>
-        <div className="house-actions">
-          <button
-            type="button"
-            className="lights-on"
-            disabled={busy}
-            onClick={() => void onLights("on")}
-          >
-            {open ? "Update lights on" : "Lights turned on"}
-          </button>
-          <button
-            type="button"
-            className="ghost lights-off"
-            disabled={busy || !open}
-            onClick={() => void onLights("off")}
-          >
-            {closed ? "Update lights off" : "House closed"}
-          </button>
-        </div>
+
+        <p className="house-meta">
+          {lightsOn
+            ? house.lightsOnAt
+              ? `Open since ${formatWhen(house.lightsOnAt)}`
+              : "Open for trick-or-treaters"
+            : house.lightsOffAt
+              ? `${closedReasonLabel(house.closedReason)} · ${formatWhen(house.lightsOffAt)}`
+              : "Not open yet"}
+        </p>
+
+        <button
+          type="button"
+          className={`lights-toggle ${lightsOn ? "is-on" : "is-off"}`}
+          disabled={busy}
+          aria-pressed={lightsOn}
+          onClick={() => void onToggleLights()}
+        >
+          {lightsOn ? "Turn lights off" : "Turn lights on"}
+        </button>
+
+        <button
+          type="button"
+          className="ghost out-of-candy"
+          disabled={busy || !lightsOn}
+          onClick={() => void onOutOfCandy()}
+        >
+          Ran out of candy
+        </button>
       </div>
 
       <div className="total-block" aria-live="polite">

@@ -6,8 +6,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS users (
   cognito_sub TEXT PRIMARY KEY,
   email TEXT,
+  lights_on BOOLEAN NOT NULL DEFAULT false,
   lights_on_at TIMESTAMPTZ,
   lights_off_at TIMESTAMPTZ,
+  closed_reason TEXT,
   house_latitude DOUBLE PRECISION,
   house_longitude DOUBLE PRECISION,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

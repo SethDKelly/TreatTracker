@@ -12,11 +12,14 @@ import {
   fieldString,
   fieldLong,
   fieldDouble,
+  fieldBoolean,
 } from "./db.js";
 
 type Claims = { sub: string; email?: string };
 
 type Geo = { latitude?: number | null; longitude?: number | null };
+
+type ClosedReason = "closed" | "out_of_candy";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -110,10 +113,20 @@ async function migrateIfNeeded(): Promise<void> {
   `);
   await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lights_on_at TIMESTAMPTZ`);
   await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lights_off_at TIMESTAMPTZ`);
+  await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lights_on BOOLEAN NOT NULL DEFAULT false`);
+  await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS closed_reason TEXT`);
   await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS house_latitude DOUBLE PRECISION`);
   await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS house_longitude DOUBLE PRECISION`);
   await executeVoid(`ALTER TABLE treat_counts ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION`);
   await executeVoid(`ALTER TABLE treat_counts ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION`);
+  // Backfill boolean from prior timestamp-only rows (open if on and never closed).
+  await executeVoid(`
+    UPDATE users
+    SET lights_on = true
+    WHERE lights_on = false
+      AND lights_on_at IS NOT NULL
+      AND lights_off_at IS NULL
+  `);
 }
 
 type CreateBody = {
@@ -128,7 +141,12 @@ type CreateBody = {
 type HouseBody = {
   latitude?: number | null;
   longitude?: number | null;
+  reason?: string | null;
 };
+
+function parseClosedReason(raw: string | null | undefined): ClosedReason {
+  return raw === "out_of_candy" ? "out_of_candy" : "closed";
+}
 
 function parseBody<T>(raw: string | undefined): T {
   if (!raw) return {} as T;
@@ -141,30 +159,36 @@ function parseBody<T>(raw: string | undefined): T {
 
 async function getHouse(userSub: string) {
   const rows = await execute(
-    `SELECT lights_on_at::text, lights_off_at::text, house_latitude, house_longitude
+    `SELECT lights_on, lights_on_at::text, lights_off_at::text, closed_reason,
+            house_latitude, house_longitude
      FROM users WHERE cognito_sub = :sub`,
     [strParam("sub", userSub)],
   );
   const r = rows[0];
   return {
-    lightsOnAt: fieldString(r?.[0]) ?? null,
-    lightsOffAt: fieldString(r?.[1]) ?? null,
-    latitude: fieldDouble(r?.[2]),
-    longitude: fieldDouble(r?.[3]),
+    lightsOn: fieldBoolean(r?.[0]),
+    lightsOnAt: fieldString(r?.[1]) ?? null,
+    lightsOffAt: fieldString(r?.[2]) ?? null,
+    closedReason: fieldString(r?.[3]) ?? null,
+    latitude: fieldDouble(r?.[4]),
+    longitude: fieldDouble(r?.[5]),
   };
 }
 
 async function setLights(
   userSub: string,
   which: "on" | "off",
-  geo: Geo,
+  body: HouseBody,
 ): Promise<APIGatewayProxyResultV2> {
-  const { latitude, longitude } = parseGeo(geo);
+  const { latitude, longitude } = parseGeo(body);
 
   if (which === "on") {
     await executeVoid(
       `UPDATE users
-       SET lights_on_at = NOW(),
+       SET lights_on = true,
+           lights_on_at = NOW(),
+           lights_off_at = NULL,
+           closed_reason = NULL,
            house_latitude = COALESCE(CAST(:lat AS double precision), house_latitude),
            house_longitude = COALESCE(CAST(:lng AS double precision), house_longitude)
        WHERE cognito_sub = :sub`,
@@ -175,14 +199,18 @@ async function setLights(
       ],
     );
   } else {
+    const reason = parseClosedReason(body.reason);
     await executeVoid(
       `UPDATE users
-       SET lights_off_at = NOW(),
+       SET lights_on = false,
+           lights_off_at = NOW(),
+           closed_reason = :reason,
            house_latitude = COALESCE(CAST(:lat AS double precision), house_latitude),
            house_longitude = COALESCE(CAST(:lng AS double precision), house_longitude)
        WHERE cognito_sub = :sub`,
       [
         strParam("sub", userSub),
+        strParam("reason", reason),
         doubleParam("lat", latitude),
         doubleParam("lng", longitude),
       ],
@@ -215,8 +243,10 @@ async function exportEntriesCsv(userSub: string): Promise<APIGatewayProxyResultV
     "created_at",
     "latitude",
     "longitude",
+    "lights_on",
     "lights_on_at",
     "lights_off_at",
+    "closed_reason",
   ];
   const lines = [header.join(",")];
   for (const r of rows) {
@@ -230,8 +260,10 @@ async function exportEntriesCsv(userSub: string): Promise<APIGatewayProxyResultV
         fieldString(r[5]) ?? "",
         fieldDouble(r[6]) == null ? "" : String(fieldDouble(r[6])),
         fieldDouble(r[7]) == null ? "" : String(fieldDouble(r[7])),
+        house.lightsOn ? "true" : "false",
         house.lightsOnAt ?? "",
         house.lightsOffAt ?? "",
+        house.closedReason ?? "",
       ]
         .map(csvEscape)
         .join(","),
@@ -393,6 +425,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     if (method === "POST" && path === "/house/lights-off") {
       return await setLights(claims.sub, "off", parseBody<HouseBody>(event.body));
+    }
+
+    if (method === "POST" && path === "/house/out-of-candy") {
+      return await setLights(claims.sub, "off", {
+        ...parseBody<HouseBody>(event.body),
+        reason: "out_of_candy",
+      });
     }
 
     if (method === "POST" && path === "/entries") {

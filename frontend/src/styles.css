@@ -186,72 +186,103 @@ button.ghost.danger {
 .house-status {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding: 1rem 1.05rem;
+  gap: 0.75rem;
+  padding: 1.1rem 1.05rem 1rem;
   border-radius: 1rem;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(246, 232, 200, 0.14);
+  border: 1px solid transparent;
   transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
 
-.house-status.open {
-  border-color: rgba(232, 146, 42, 0.45);
-  background: linear-gradient(145deg, rgba(232, 146, 42, 0.16), rgba(0, 0, 0, 0.2));
-  box-shadow: 0 0 20px rgba(232, 146, 42, 0.18);
+.house-status.on {
+  border-color: rgba(232, 146, 42, 0.55);
+  background: linear-gradient(145deg, rgba(232, 146, 42, 0.22), rgba(47, 93, 58, 0.18));
+  box-shadow: 0 0 28px rgba(232, 146, 42, 0.28);
+  animation: house-pulse 2.4s ease-in-out infinite alternate;
 }
 
-.house-status.closed {
-  border-color: rgba(246, 232, 200, 0.2);
+.house-status.off {
+  border-color: rgba(246, 232, 200, 0.12);
+  background: rgba(0, 0, 0, 0.4);
   box-shadow: none;
-  opacity: 0.92;
 }
 
-.house-title {
-  margin: 0;
+@keyframes house-pulse {
+  from {
+    box-shadow: 0 0 14px rgba(232, 146, 42, 0.18);
+  }
+  to {
+    box-shadow: 0 0 32px rgba(232, 146, 42, 0.36);
+  }
+}
+
+.lights-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.lights-dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.house-status.on .lights-dot {
+  background: #f5c15d;
+  box-shadow: 0 0 12px rgba(245, 193, 93, 0.9);
+}
+
+.house-status.off .lights-dot {
+  background: rgba(246, 232, 200, 0.28);
+}
+
+.lights-state {
   font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 500;
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.house-status.on .lights-state {
   color: var(--amber);
 }
 
-.house-times {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+.house-status.off .lights-state {
+  color: rgba(246, 232, 200, 0.72);
 }
 
-.house-times > div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-}
-
-.house-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.65;
-}
-
-.house-value {
-  font-size: 0.95rem;
-  line-height: 1.25;
-}
-
-.house-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.house-actions button {
-  padding: 0.7rem 0.75rem;
+.house-meta {
+  margin: 0;
   font-size: 0.9rem;
+  opacity: 0.72;
+  line-height: 1.35;
 }
 
-button.lights-on {
+button.lights-toggle {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  font-size: 1.05rem;
+}
+
+button.lights-toggle.is-on {
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(246, 232, 200, 0.35);
+  box-shadow: none;
+}
+
+button.lights-toggle.is-off {
   background: linear-gradient(135deg, #f0b24a 0%, var(--amber-deep) 100%);
+}
+
+button.out-of-candy {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  color: #f0a89e;
+  border-color: rgba(179, 58, 43, 0.45);
 }
 
 .total-block {
