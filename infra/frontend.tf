@@ -71,6 +71,13 @@ resource "aws_acm_certificate_validation" "spa" {
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
 
+resource "aws_cloudfront_function" "season_gate" {
+  name    = "${var.name_prefix}-season-gate"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = file("${path.module}/cloudfront/season-gate.js")
+}
+
 resource "aws_cloudfront_distribution" "spa" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -97,6 +104,12 @@ resource "aws_cloudfront_distribution" "spa" {
       cookies {
         forward = "none"
       }
+    }
+
+    # Off-season: rewrite document requests to /off-season.html (countdown page).
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.season_gate.arn
     }
   }
 

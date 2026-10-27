@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121212" />
+    <title>TreatTracker — Closed</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #f6e8c8;
+        --amber: #e8922a;
+        --font-display: "Fraunces", Georgia, serif;
+        --font-body: "Source Sans 3", system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        font-family: var(--font-body);
+        color: var(--paper);
+        background: #121212;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+      }
+      main {
+        max-width: 26rem;
+        width: 100%;
+        text-align: center;
+        animation: rise 0.55s ease-out both;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .brand {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: clamp(2.2rem, 9vw, 2.9rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--amber);
+        text-shadow: 0 2px 24px rgba(232, 146, 42, 0.35);
+      }
+      h1 {
+        margin: 1rem 0 0.5rem;
+        font-family: var(--font-display);
+        font-size: 1.45rem;
+        font-weight: 500;
+      }
+      p {
+        margin: 0.4rem 0 0;
+        line-height: 1.45;
+        opacity: 0.85;
+      }
+      .countdown {
+        margin-top: 1.5rem;
+        padding: 1.1rem 1rem;
+        border-radius: 1rem;
+        border: 1px solid rgba(232, 146, 42, 0.35);
+        background: linear-gradient(145deg, rgba(232, 146, 42, 0.16), rgba(0, 0, 0, 0.25));
+      }
+      .countdown-label {
+        display: block;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        opacity: 0.7;
+      }
+      .countdown-value {
+        display: block;
+        margin-top: 0.45rem;
+        font-family: var(--font-display);
+        font-size: 1.65rem;
+        color: var(--amber);
+        line-height: 1.2;
+      }
+      .subtle {
+        margin-top: 1.25rem;
+        font-size: 0.9rem;
+        opacity: 0.65;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">TreatTracker</p>
+      <h1>Closed for the season</h1>
+      <p>Trick-or-treat tracking opens again the week before Halloween.</p>
+      <div class="countdown" aria-live="polite">
+        <span class="countdown-label">Opens in</span>
+        <span class="countdown-value" id="countdown">…</span>
+      </div>
+      <p class="subtle" id="opens-at"></p>
+    </main>
+    <script>
+      const TZ = "America/Chicago";
+
+      function zonedLocalToUtc(year, month, day, hour, minute) {
+        const formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: TZ,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hourCycle: "h23",
+        });
+        let utcMillis = Date.UTC(year, month - 1, day, hour, minute, 0);
+        for (let i = 0; i < 4; i++) {
+          const parts = formatter.formatToParts(new Date(utcMillis));
+          const get = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
+          const asIfUtc = Date.UTC(
+            get("year"),
+            get("month") - 1,
+            get("day"),
+            get("hour"),
+            get("minute"),
+            get("second"),
+          );
+          const desired = Date.UTC(year, month - 1, day, hour, minute, 0);
+          utcMillis += desired - asIfUtc;
+        }
+        return new Date(utcMillis);
+      }
+
+      function nextOpenAt(now = new Date()) {
+        const year = now.getFullYear();
+        const openThis = zonedLocalToUtc(year, 10, 24, 0, 0);
+        const closeThis = zonedLocalToUtc(year, 11, 1, 12, 0);
+        if (now < openThis) return openThis;
+        if (now < closeThis) return openThis; // shouldn't land here while gated
+        return zonedLocalToUtc(year + 1, 10, 24, 0, 0);
+      }
+
+      function formatRemaining(ms) {
+        if (ms <= 0) return "Opening now — refresh";
+        const totalSec = Math.floor(ms / 1000);
+        const days = Math.floor(totalSec / 86400);
+        const hours = Math.floor((totalSec % 86400) / 3600);
+        const minutes = Math.floor((totalSec % 3600) / 60);
+        const seconds = totalSec % 60;
+        if (days > 0) return days + "d " + hours + "h " + minutes + "m";
+        if (hours > 0) return hours + "h " + minutes + "m " + seconds + "s";
+        return minutes + "m " + seconds + "s";
+      }
+
+      const countdownEl = document.getElementById("countdown");
+      const opensAtEl = document.getElementById("opens-at");
+
+      function tick() {
+        const openAt = nextOpenAt();
+        const remaining = openAt.getTime() - Date.now();
+        countdownEl.textContent = formatRemaining(remaining);
+        opensAtEl.textContent =
+          "Opens " +
+          openAt.toLocaleString(undefined, {
+            timeZone: TZ,
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZoneName: "short",
+          });
+        if (remaining <= 0) {
+          location.reload();
+        }
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    </script>
+  </body>
+</html>

@@ -14,6 +14,7 @@ import {
   fieldDouble,
   fieldBoolean,
 } from "./db.js";
+import { getSeasonBounds, isSeasonOpen } from "../../shared/season.js";
 
 type Claims = { sub: string; email?: string };
 
@@ -393,6 +394,17 @@ async function deleteEntry(userSub: string, id: string) {
   };
 }
 
+function seasonClosedResponse(): APIGatewayProxyResultV2 {
+  const { openAt, closeAt, year } = getSeasonBounds();
+  return json(403, {
+    error: "season_closed",
+    message: "TreatTracker is closed for the season",
+    year,
+    opensAt: openAt.toISOString(),
+    closesAt: closeAt.toISOString(),
+  });
+}
+
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   if (event.requestContext.http.method === "OPTIONS") {
     return json(204, {});
@@ -409,6 +421,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const method = event.requestContext.http.method;
     const path = event.rawPath.replace(/\/$/, "") || "/";
+    const mutating = method === "POST" || method === "DELETE";
+
+    // Reads (entries list / CSV) stay available off-season; writes are blocked.
+    if (mutating && !isSeasonOpen()) {
+      return seasonClosedResponse();
+    }
 
     if (method === "GET" && path === "/entries") {
       const data = await listEntries(claims.sub);

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
+import { isSeasonOpen } from "../../shared/season";
 import Login from "./Login";
+import SeasonClosed from "./SeasonClosed";
 import Tracker from "./Tracker";
 
 type Phase = "loading" | "signedOut" | "signedIn";
@@ -8,6 +10,7 @@ type Phase = "loading" | "signedOut" | "signedIn";
 export default function App() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [email, setEmail] = useState<string | undefined>();
+  const [seasonOpen, setSeasonOpen] = useState(() => isSeasonOpen());
 
   const refreshSession = useCallback(async () => {
     try {
@@ -25,6 +28,21 @@ export default function App() {
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSeasonOpen(isSeasonOpen());
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  if (!seasonOpen) {
+    return (
+      <main className="app">
+        <SeasonClosed />
+      </main>
+    );
+  }
 
   if (phase === "loading") {
     return (

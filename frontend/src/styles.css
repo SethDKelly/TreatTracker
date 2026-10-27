@@ -397,3 +397,39 @@ button.out-of-candy {
   font-size: 0.9rem;
   opacity: 0.7;
 }
+
+.season-closed {
+  text-align: center;
+}
+
+.season-closed h1 {
+  margin: 0.75rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 500;
+}
+
+.countdown {
+  margin-top: 0.5rem;
+  padding: 1.1rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(232, 146, 42, 0.35);
+  background: linear-gradient(145deg, rgba(232, 146, 42, 0.16), rgba(0, 0, 0, 0.25));
+}
+
+.countdown-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+
+.countdown-value {
+  display: block;
+  margin-top: 0.45rem;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  color: var(--amber);
+  line-height: 1.2;
+}
