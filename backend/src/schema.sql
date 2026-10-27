@@ -1,4 +1,4 @@
--- Applied automatically by the Lambda on first request (CREATE IF NOT EXISTS).
+-- Applied automatically by the Lambda on first request (CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
 -- Kept here for documentation and manual ops.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -6,6 +6,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS users (
   cognito_sub TEXT PRIMARY KEY,
   email TEXT,
+  lights_on_at TIMESTAMPTZ,
+  lights_off_at TIMESTAMPTZ,
+  house_latitude DOUBLE PRECISION,
+  house_longitude DOUBLE PRECISION,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -16,7 +20,9 @@ CREATE TABLE IF NOT EXISTS treat_counts (
   start_at TIMESTAMPTZ,
   end_at TIMESTAMPTZ,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION
 );
 
 CREATE INDEX IF NOT EXISTS treat_counts_user_recorded_idx

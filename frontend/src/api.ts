@@ -2,6 +2,11 @@ import { fetchAuthSession } from "aws-amplify/auth";
 
 const apiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "");
 
+export type Geo = {
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
 export type Entry = {
   id: string;
   count: number;
@@ -9,12 +14,41 @@ export type Entry = {
   endAt: string | null;
   recordedAt: string;
   createdAt: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export type HouseStatus = {
+  lightsOnAt: string | null;
+  lightsOffAt: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type EntriesResponse = {
   entries: Entry[];
   total: number;
+  house: HouseStatus;
 };
+
+/** Best-effort device location; returns empty if denied, unavailable, or timed out. */
+export function getDeviceGeo(timeoutMs = 4000): Promise<Geo> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.resolve({});
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+      },
+      () => resolve({}),
+      { enableHighAccuracy: false, timeout: timeoutMs, maximumAge: 60_000 },
+    );
+  });
+}
 
 async function authHeaders(): Promise<HeadersInit> {
   const session = await fetchAuthSession();
@@ -56,10 +90,26 @@ export function createEntry(body: {
   mode: "quick" | "range";
   startAt?: string;
   endAt?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }): Promise<{ entry: Entry }> {
   return request<{ entry: Entry }>("/entries", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function setLightsOn(geo: Geo = {}): Promise<{ house: HouseStatus }> {
+  return request<{ house: HouseStatus }>("/house/lights-on", {
+    method: "POST",
+    body: JSON.stringify(geo),
+  });
+}
+
+export function setLightsOff(geo: Geo = {}): Promise<{ house: HouseStatus }> {
+  return request<{ house: HouseStatus }>("/house/lights-off", {
+    method: "POST",
+    body: JSON.stringify(geo),
   });
 }
 

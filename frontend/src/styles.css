@@ -183,6 +183,77 @@ button.ghost.danger {
   justify-content: flex-end;
 }
 
+.house-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(246, 232, 200, 0.14);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.house-status.open {
+  border-color: rgba(232, 146, 42, 0.45);
+  background: linear-gradient(145deg, rgba(232, 146, 42, 0.16), rgba(0, 0, 0, 0.2));
+  box-shadow: 0 0 20px rgba(232, 146, 42, 0.18);
+}
+
+.house-status.closed {
+  border-color: rgba(246, 232, 200, 0.2);
+  box-shadow: none;
+  opacity: 0.92;
+}
+
+.house-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--amber);
+}
+
+.house-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.house-times > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.house-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.65;
+}
+
+.house-value {
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.house-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.house-actions button {
+  padding: 0.7rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+button.lights-on {
+  background: linear-gradient(135deg, #f0b24a 0%, var(--amber-deep) 100%);
+}
+
 .total-block {
   text-align: center;
   padding: 1.25rem 1rem;

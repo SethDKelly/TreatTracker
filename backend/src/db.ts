@@ -58,6 +58,13 @@ export function longParam(name: string, value: number | null | undefined): SqlPa
   return { name, value: { longValue: value } };
 }
 
+export function doubleParam(name: string, value: number | null | undefined): SqlParameter {
+  if (value == null || !Number.isFinite(value)) {
+    return { name, value: { isNull: true } };
+  }
+  return { name, value: { doubleValue: value } };
+}
+
 export function fieldString(field: Field | undefined): string | null {
   if (!field || field.isNull) return null;
   return field.stringValue ?? null;
@@ -65,6 +72,13 @@ export function fieldString(field: Field | undefined): string | null {
 
 export function fieldLong(field: Field | undefined): number | null {
   if (!field || field.isNull) return null;
+  if (typeof field.longValue === "number") return field.longValue;
+  return null;
+}
+
+export function fieldDouble(field: Field | undefined): number | null {
+  if (!field || field.isNull) return null;
+  if (typeof field.doubleValue === "number") return field.doubleValue;
   if (typeof field.longValue === "number") return field.longValue;
   return null;
 }

@@ -8,11 +8,15 @@ import {
   executeVoid,
   strParam,
   longParam,
+  doubleParam,
   fieldString,
   fieldLong,
+  fieldDouble,
 } from "./db.js";
 
 type Claims = { sub: string; email?: string };
+
+type Geo = { latitude?: number | null; longitude?: number | null };
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -38,50 +42,18 @@ function csvEscape(value: string): string {
   return value;
 }
 
-async function exportEntriesCsv(): Promise<APIGatewayProxyResultV2> {
-  // Anonymized export: entry UUID + opaque user_id (cognito_sub). Never include email.
-  const rows = await execute(
-    `SELECT id::text, user_sub, count, start_at::text, end_at::text, recorded_at::text, created_at::text
-     FROM treat_counts
-     ORDER BY recorded_at ASC
-     LIMIT 10000`,
-  );
-
-  const header = [
-    "id",
-    "user_id",
-    "count",
-    "start_at",
-    "end_at",
-    "recorded_at",
-    "created_at",
-  ];
-  const lines = [header.join(",")];
-  for (const r of rows) {
-    lines.push(
-      [
-        fieldString(r[0]) ?? "",
-        fieldString(r[1]) ?? "",
-        String(fieldLong(r[2]) ?? 0),
-        fieldString(r[3]) ?? "",
-        fieldString(r[4]) ?? "",
-        fieldString(r[5]) ?? "",
-        fieldString(r[6]) ?? "",
-      ]
-        .map(csvEscape)
-        .join(","),
-    );
+function parseGeo(raw: Geo | undefined): { latitude: number | null; longitude: number | null } {
+  const latitude =
+    typeof raw?.latitude === "number" && Number.isFinite(raw.latitude) ? raw.latitude : null;
+  const longitude =
+    typeof raw?.longitude === "number" && Number.isFinite(raw.longitude) ? raw.longitude : null;
+  if (latitude == null || longitude == null) {
+    return { latitude: null, longitude: null };
   }
-
-  return {
-    statusCode: 200,
-    headers: {
-      "content-type": "text/csv; charset=utf-8",
-      "content-disposition": 'attachment; filename="treattracker-entries.csv"',
-      ...corsHeaders,
-    },
-    body: lines.join("\n"),
-  };
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return { latitude: null, longitude: null };
+  }
+  return { latitude, longitude };
 }
 
 function claimsFromEvent(event: APIGatewayProxyEventV2): Claims | null {
@@ -136,6 +108,12 @@ async function migrateIfNeeded(): Promise<void> {
     CREATE INDEX IF NOT EXISTS treat_counts_user_recorded_idx
       ON treat_counts (user_sub, recorded_at DESC)
   `);
+  await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lights_on_at TIMESTAMPTZ`);
+  await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lights_off_at TIMESTAMPTZ`);
+  await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS house_latitude DOUBLE PRECISION`);
+  await executeVoid(`ALTER TABLE users ADD COLUMN IF NOT EXISTS house_longitude DOUBLE PRECISION`);
+  await executeVoid(`ALTER TABLE treat_counts ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION`);
+  await executeVoid(`ALTER TABLE treat_counts ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION`);
 }
 
 type CreateBody = {
@@ -143,20 +121,138 @@ type CreateBody = {
   startAt?: string | null;
   endAt?: string | null;
   mode?: "quick" | "range";
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
-function parseBody(raw: string | undefined): CreateBody {
-  if (!raw) return {};
+type HouseBody = {
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+function parseBody<T>(raw: string | undefined): T {
+  if (!raw) return {} as T;
   try {
-    return JSON.parse(raw) as CreateBody;
+    return JSON.parse(raw) as T;
   } catch {
-    return {};
+    return {} as T;
   }
+}
+
+async function getHouse(userSub: string) {
+  const rows = await execute(
+    `SELECT lights_on_at::text, lights_off_at::text, house_latitude, house_longitude
+     FROM users WHERE cognito_sub = :sub`,
+    [strParam("sub", userSub)],
+  );
+  const r = rows[0];
+  return {
+    lightsOnAt: fieldString(r?.[0]) ?? null,
+    lightsOffAt: fieldString(r?.[1]) ?? null,
+    latitude: fieldDouble(r?.[2]),
+    longitude: fieldDouble(r?.[3]),
+  };
+}
+
+async function setLights(
+  userSub: string,
+  which: "on" | "off",
+  geo: Geo,
+): Promise<APIGatewayProxyResultV2> {
+  const { latitude, longitude } = parseGeo(geo);
+
+  if (which === "on") {
+    await executeVoid(
+      `UPDATE users
+       SET lights_on_at = NOW(),
+           house_latitude = COALESCE(CAST(:lat AS double precision), house_latitude),
+           house_longitude = COALESCE(CAST(:lng AS double precision), house_longitude)
+       WHERE cognito_sub = :sub`,
+      [
+        strParam("sub", userSub),
+        doubleParam("lat", latitude),
+        doubleParam("lng", longitude),
+      ],
+    );
+  } else {
+    await executeVoid(
+      `UPDATE users
+       SET lights_off_at = NOW(),
+           house_latitude = COALESCE(CAST(:lat AS double precision), house_latitude),
+           house_longitude = COALESCE(CAST(:lng AS double precision), house_longitude)
+       WHERE cognito_sub = :sub`,
+      [
+        strParam("sub", userSub),
+        doubleParam("lat", latitude),
+        doubleParam("lng", longitude),
+      ],
+    );
+  }
+
+  const house = await getHouse(userSub);
+  return json(200, { house });
+}
+
+async function exportEntriesCsv(userSub: string): Promise<APIGatewayProxyResultV2> {
+  // Signed-in user only. Opaque entry id; never include email.
+  const house = await getHouse(userSub);
+  const rows = await execute(
+    `SELECT id::text, count, start_at::text, end_at::text, recorded_at::text, created_at::text,
+            latitude, longitude
+     FROM treat_counts
+     WHERE user_sub = :sub
+     ORDER BY recorded_at ASC
+     LIMIT 10000`,
+    [strParam("sub", userSub)],
+  );
+
+  const header = [
+    "id",
+    "count",
+    "start_at",
+    "end_at",
+    "recorded_at",
+    "created_at",
+    "latitude",
+    "longitude",
+    "lights_on_at",
+    "lights_off_at",
+  ];
+  const lines = [header.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        fieldString(r[0]) ?? "",
+        String(fieldLong(r[1]) ?? 0),
+        fieldString(r[2]) ?? "",
+        fieldString(r[3]) ?? "",
+        fieldString(r[4]) ?? "",
+        fieldString(r[5]) ?? "",
+        fieldDouble(r[6]) == null ? "" : String(fieldDouble(r[6])),
+        fieldDouble(r[7]) == null ? "" : String(fieldDouble(r[7])),
+        house.lightsOnAt ?? "",
+        house.lightsOffAt ?? "",
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+
+  return {
+    statusCode: 200,
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": 'attachment; filename="treattracker-entries.csv"',
+      ...corsHeaders,
+    },
+    body: lines.join("\n"),
+  };
 }
 
 async function listEntries(userSub: string) {
   const rows = await execute(
-    `SELECT id::text, count, start_at::text, end_at::text, recorded_at::text, created_at::text
+    `SELECT id::text, count, start_at::text, end_at::text, recorded_at::text, created_at::text,
+            latitude, longitude
      FROM treat_counts
      WHERE user_sub = :sub
      ORDER BY recorded_at DESC
@@ -171,6 +267,8 @@ async function listEntries(userSub: string) {
     endAt: fieldString(r[3]),
     recordedAt: fieldString(r[4]),
     createdAt: fieldString(r[5]),
+    latitude: fieldDouble(r[6]),
+    longitude: fieldDouble(r[7]),
   }));
 
   const sumRows = await execute(
@@ -178,7 +276,8 @@ async function listEntries(userSub: string) {
     [strParam("sub", userSub)],
   );
   const total = fieldLong(sumRows[0]?.[0]) ?? 0;
-  return { entries, total };
+  const house = await getHouse(userSub);
+  return { entries, total, house };
 }
 
 async function createEntry(userSub: string, body: CreateBody) {
@@ -190,6 +289,7 @@ async function createEntry(userSub: string, body: CreateBody) {
   const mode = body.mode === "range" ? "range" : "quick";
   let startAt: string | null = null;
   let endAt: string | null = null;
+  const { latitude, longitude } = parseGeo(body);
 
   if (mode === "range") {
     if (!body.startAt || !body.endAt) {
@@ -208,20 +308,25 @@ async function createEntry(userSub: string, body: CreateBody) {
   }
 
   const rows = await execute(
-    `INSERT INTO treat_counts (user_sub, count, start_at, end_at, recorded_at)
+    `INSERT INTO treat_counts (user_sub, count, start_at, end_at, recorded_at, latitude, longitude)
      VALUES (
        :sub,
        :count,
        CAST(:start_at AS timestamptz),
        CAST(:end_at AS timestamptz),
-       NOW()
+       NOW(),
+       CAST(:lat AS double precision),
+       CAST(:lng AS double precision)
      )
-     RETURNING id::text, count, start_at::text, end_at::text, recorded_at::text, created_at::text`,
+     RETURNING id::text, count, start_at::text, end_at::text, recorded_at::text, created_at::text,
+               latitude, longitude`,
     [
       strParam("sub", userSub),
       longParam("count", count),
       strParam("start_at", startAt),
       strParam("end_at", endAt),
+      doubleParam("lat", latitude),
+      doubleParam("lng", longitude),
     ],
   );
 
@@ -234,6 +339,8 @@ async function createEntry(userSub: string, body: CreateBody) {
       endAt: fieldString(r[3]),
       recordedAt: fieldString(r[4]),
       createdAt: fieldString(r[5]),
+      latitude: fieldDouble(r[6]),
+      longitude: fieldDouble(r[7]),
     },
   });
 }
@@ -277,11 +384,19 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     if (method === "GET" && (path === "/export.csv" || path === "/export")) {
-      return await exportEntriesCsv();
+      return await exportEntriesCsv(claims.sub);
+    }
+
+    if (method === "POST" && path === "/house/lights-on") {
+      return await setLights(claims.sub, "on", parseBody<HouseBody>(event.body));
+    }
+
+    if (method === "POST" && path === "/house/lights-off") {
+      return await setLights(claims.sub, "off", parseBody<HouseBody>(event.body));
     }
 
     if (method === "POST" && path === "/entries") {
-      return await createEntry(claims.sub, parseBody(event.body));
+      return await createEntry(claims.sub, parseBody<CreateBody>(event.body));
     }
 
     const deleteMatch = path.match(/^\/entries\/([0-9a-f-]{36})$/i);

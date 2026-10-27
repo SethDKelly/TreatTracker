@@ -4,8 +4,12 @@ import {
   createEntry,
   deleteEntry,
   downloadEntriesCsv,
+  getDeviceGeo,
   listEntries,
+  setLightsOff,
+  setLightsOn,
   type Entry,
+  type HouseStatus,
 } from "./api";
 
 type Props = {
@@ -38,6 +42,7 @@ export default function Tracker({ email, onSignedOut }: Props) {
   const [endAt, setEndAt] = useState(() => toLocalInputValue(new Date()));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [total, setTotal] = useState(0);
+  const [house, setHouse] = useState<HouseStatus>({ lightsOnAt: null, lightsOffAt: null });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +50,7 @@ export default function Tracker({ email, onSignedOut }: Props) {
     const data = await listEntries();
     setEntries(data.entries);
     setTotal(data.total);
+    setHouse(data.house ?? { lightsOnAt: null, lightsOffAt: null });
   }
 
   useEffect(() => {
@@ -62,20 +68,36 @@ export default function Tracker({ email, onSignedOut }: Props) {
       if (!Number.isFinite(n) || n < 0) {
         throw new Error("Enter a valid count");
       }
+      const geo = await getDeviceGeo();
       if (mode === "quick") {
-        await createEntry({ count: n, mode: "quick" });
+        await createEntry({ count: n, mode: "quick", ...geo });
       } else {
         await createEntry({
           count: n,
           mode: "range",
           startAt: new Date(startAt).toISOString(),
           endAt: new Date(endAt).toISOString(),
+          ...geo,
         });
       }
       setCount("1");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onLights(which: "on" | "off") {
+    setBusy(true);
+    setError(null);
+    try {
+      const geo = await getDeviceGeo();
+      const res = which === "on" ? await setLightsOn(geo) : await setLightsOff(geo);
+      setHouse(res.house);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update house status");
     } finally {
       setBusy(false);
     }
@@ -111,6 +133,9 @@ export default function Tracker({ email, onSignedOut }: Props) {
     }
   }
 
+  const open = Boolean(house.lightsOnAt);
+  const closed = Boolean(house.lightsOffAt);
+
   return (
     <section className="panel tracker">
       <header className="tracker-head">
@@ -127,6 +152,42 @@ export default function Tracker({ email, onSignedOut }: Props) {
           </button>
         </div>
       </header>
+
+      <div className={`house-status ${open && !closed ? "open" : ""} ${closed ? "closed" : ""}`}>
+        <p className="house-title">House status</p>
+        <div className="house-times">
+          <div>
+            <span className="house-label">Lights on</span>
+            <span className="house-value">
+              {house.lightsOnAt ? formatWhen(house.lightsOnAt) : "Not yet"}
+            </span>
+          </div>
+          <div>
+            <span className="house-label">Lights off</span>
+            <span className="house-value">
+              {house.lightsOffAt ? formatWhen(house.lightsOffAt) : "Still open"}
+            </span>
+          </div>
+        </div>
+        <div className="house-actions">
+          <button
+            type="button"
+            className="lights-on"
+            disabled={busy}
+            onClick={() => void onLights("on")}
+          >
+            {open ? "Update lights on" : "Lights turned on"}
+          </button>
+          <button
+            type="button"
+            className="ghost lights-off"
+            disabled={busy || !open}
+            onClick={() => void onLights("off")}
+          >
+            {closed ? "Update lights off" : "House closed"}
+          </button>
+        </div>
+      </div>
 
       <div className="total-block" aria-live="polite">
         <span className="total-label">Trick-or-treaters</span>
@@ -189,7 +250,7 @@ export default function Tracker({ email, onSignedOut }: Props) {
             </label>
           </>
         ) : (
-          <p className="hint">Logged at the current time when you submit.</p>
+          <p className="hint">Logged at the current time when you submit. Location is saved if you allow it.</p>
         )}
 
         <button type="submit" disabled={busy}>
