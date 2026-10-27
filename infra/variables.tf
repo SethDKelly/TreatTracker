@@ -53,13 +53,43 @@ variable "admin_emails" {
 }
 
 variable "aurora_min_acu" {
-  description = "Aurora Serverless v2 minimum ACU."
+  description = "In-season Aurora Serverless v2 minimum ACU (scale-up target)."
   type        = number
   default     = 0.5
 }
 
 variable "aurora_max_acu" {
-  description = "Aurora Serverless v2 maximum ACU."
+  description = "In-season Aurora Serverless v2 maximum ACU (scale-up target)."
   type        = number
   default     = 2
+}
+
+variable "aurora_off_min_acu" {
+  description = "Off-season minimum ACU (0 enables auto-pause)."
+  type        = number
+  default     = 0
+}
+
+variable "aurora_off_max_acu" {
+  description = "Off-season maximum ACU (kept small; cluster can still wake for rare reads)."
+  type        = number
+  default     = 1
+}
+
+variable "aurora_auto_pause_seconds" {
+  description = "Idle seconds before Aurora pauses when min ACU is 0 (300–86400)."
+  type        = number
+  default     = 300
+}
+
+variable "aurora_scale_up_cron" {
+  description = "EventBridge cron (America/Chicago) to restore in-season ACUs. Default: Oct 23 12:00."
+  type        = string
+  default     = "cron(0 12 23 10 ? *)"
+}
+
+variable "aurora_scale_down_cron" {
+  description = "EventBridge cron (America/Chicago) to set off-season ACUs. Default: Nov 1 13:00."
+  type        = string
+  default     = "cron(0 13 1 11 ? *)"
 }

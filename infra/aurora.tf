@@ -24,6 +24,11 @@ resource "aws_rds_cluster" "main" {
   tags = {
     Name = "${var.name_prefix}-aurora"
   }
+
+  # EventBridge Scheduler owns runtime ACU range after create (seasonal scale up/down).
+  lifecycle {
+    ignore_changes = [serverlessv2_scaling_configuration]
+  }
 }
 
 resource "aws_rds_cluster_instance" "main" {

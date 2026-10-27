@@ -39,3 +39,13 @@ output "lambda_function_name" {
 output "aurora_cluster_arn" {
   value = aws_rds_cluster.main.arn
 }
+
+output "aurora_scale_up_schedule" {
+  description = "EventBridge schedule that restores in-season Aurora ACUs."
+  value       = aws_scheduler_schedule.aurora_scale_up.name
+}
+
+output "aurora_scale_down_schedule" {
+  description = "EventBridge schedule that sets off-season Aurora ACUs (min 0 / auto-pause)."
+  value       = aws_scheduler_schedule.aurora_scale_down.name
+}
