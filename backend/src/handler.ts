@@ -72,10 +72,32 @@ function claimsFromEvent(event: APIGatewayProxyEventV2): Claims | null {
 
   const claims = authorizer?.jwt?.claims ?? authorizer?.claims;
   if (!claims?.sub) return null;
+  const emailClaim = claims.email ? String(claims.email) : undefined;
+  const usernameClaim = claims.username ? String(claims.username) : undefined;
+  const email =
+    emailClaim ??
+    (usernameClaim && usernameClaim.includes("@") ? usernameClaim : undefined);
   return {
     sub: String(claims.sub),
-    email: claims.email ? String(claims.email) : undefined,
+    email: email?.toLowerCase(),
   };
+}
+
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "ollioxenhomefree@gmail.com")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+function isAdminEmail(email: string | null | undefined): boolean {
+  return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+async function resolveUserEmail(userSub: string, claimsEmail?: string): Promise<string | null> {
+  if (claimsEmail) return claimsEmail.toLowerCase();
+  const rows = await execute(`SELECT email FROM users WHERE cognito_sub = :sub`, [
+    strParam("sub", userSub),
+  ]);
+  return fieldString(rows[0]?.[0])?.toLowerCase() ?? null;
 }
 
 async function ensureUser(claims: Claims): Promise<void> {
@@ -282,6 +304,87 @@ async function exportEntriesCsv(userSub: string): Promise<APIGatewayProxyResultV
   };
 }
 
+/** Admin-only: all users' entries + house status (includes email). */
+async function exportAllEntriesCsv(): Promise<APIGatewayProxyResultV2> {
+  const rows = await execute(
+    `SELECT
+       u.email,
+       u.cognito_sub,
+       u.lights_on,
+       u.lights_on_at::text,
+       u.lights_off_at::text,
+       u.closed_reason,
+       u.house_latitude,
+       u.house_longitude,
+       t.id::text,
+       t.count,
+       t.start_at::text,
+       t.end_at::text,
+       t.recorded_at::text,
+       t.created_at::text,
+       t.latitude,
+       t.longitude
+     FROM users u
+     LEFT JOIN treat_counts t ON t.user_sub = u.cognito_sub
+     ORDER BY u.email ASC NULLS LAST, t.recorded_at ASC NULLS LAST
+     LIMIT 50000`,
+  );
+
+  const header = [
+    "user_email",
+    "user_sub",
+    "lights_on",
+    "lights_on_at",
+    "lights_off_at",
+    "closed_reason",
+    "house_latitude",
+    "house_longitude",
+    "id",
+    "count",
+    "start_at",
+    "end_at",
+    "recorded_at",
+    "created_at",
+    "latitude",
+    "longitude",
+  ];
+  const lines = [header.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        fieldString(r[0]) ?? "",
+        fieldString(r[1]) ?? "",
+        fieldBoolean(r[2]) ? "true" : "false",
+        fieldString(r[3]) ?? "",
+        fieldString(r[4]) ?? "",
+        fieldString(r[5]) ?? "",
+        fieldDouble(r[6]) == null ? "" : String(fieldDouble(r[6])),
+        fieldDouble(r[7]) == null ? "" : String(fieldDouble(r[7])),
+        fieldString(r[8]) ?? "",
+        fieldLong(r[9]) == null ? "" : String(fieldLong(r[9])),
+        fieldString(r[10]) ?? "",
+        fieldString(r[11]) ?? "",
+        fieldString(r[12]) ?? "",
+        fieldString(r[13]) ?? "",
+        fieldDouble(r[14]) == null ? "" : String(fieldDouble(r[14])),
+        fieldDouble(r[15]) == null ? "" : String(fieldDouble(r[15])),
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+
+  return {
+    statusCode: 200,
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": 'attachment; filename="treattracker-all-entries.csv"',
+      ...corsHeaders,
+    },
+    body: lines.join("\n"),
+  };
+}
+
 async function listEntries(userSub: string) {
   const rows = await execute(
     `SELECT id::text, count, start_at::text, end_at::text, recorded_at::text, created_at::text,
@@ -435,6 +538,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     if (method === "GET" && (path === "/export.csv" || path === "/export")) {
       return await exportEntriesCsv(claims.sub);
+    }
+
+    if (method === "GET" && (path === "/admin/export.csv" || path === "/admin/export")) {
+      const email = await resolveUserEmail(claims.sub, claims.email);
+      if (!isAdminEmail(email)) {
+        return json(403, { error: "forbidden" });
+      }
+      return await exportAllEntriesCsv();
     }
 
     if (method === "POST" && path === "/house/lights-on") {

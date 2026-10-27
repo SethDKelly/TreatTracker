@@ -46,6 +46,12 @@ variable "db_name" {
   default     = "treattracker"
 }
 
+variable "admin_emails" {
+  description = "Comma-separated emails allowed to download the full (all users) CSV export."
+  type        = string
+  default     = "ollioxenhomefree@gmail.com"
+}
+
 variable "aurora_min_acu" {
   description = "Aurora Serverless v2 minimum ACU."
   type        = number

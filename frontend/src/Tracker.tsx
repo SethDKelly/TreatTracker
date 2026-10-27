@@ -3,8 +3,10 @@ import { signOut } from "aws-amplify/auth";
 import {
   createEntry,
   deleteEntry,
+  downloadAllEntriesCsv,
   downloadEntriesCsv,
   getDeviceGeo,
+  isAdminEmail,
   listEntries,
   setLightsOff,
   setLightsOn,
@@ -161,7 +163,20 @@ export default function Tracker({ email, onSignedOut }: Props) {
     }
   }
 
+  async function onAdminDownload() {
+    setBusy(true);
+    setError(null);
+    try {
+      await downloadAllEntriesCsv();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Admin download failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const lightsOn = Boolean(house.lightsOn);
+  const isAdmin = isAdminEmail(email);
 
   return (
     <section className="panel tracker">
@@ -174,6 +189,16 @@ export default function Tracker({ email, onSignedOut }: Props) {
           <button type="button" className="ghost" disabled={busy} onClick={() => void onDownload()}>
             Download CSV
           </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy}
+              onClick={() => void onAdminDownload()}
+            >
+              Admin: all CSV
+            </button>
+          ) : null}
           <button type="button" className="ghost" onClick={() => void handleSignOut()}>
             Sign out
           </button>

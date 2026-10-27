@@ -79,9 +79,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      CLUSTER_ARN = aws_rds_cluster.main.arn
-      SECRET_ARN  = aws_rds_cluster.main.master_user_secret[0].secret_arn
-      DB_NAME     = var.db_name
+      CLUSTER_ARN  = aws_rds_cluster.main.arn
+      SECRET_ARN   = aws_rds_cluster.main.master_user_secret[0].secret_arn
+      DB_NAME      = var.db_name
+      ADMIN_EMAILS = var.admin_emails
     }
   }
 

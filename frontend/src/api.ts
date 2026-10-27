@@ -131,12 +131,22 @@ export function deleteEntry(id: string): Promise<void> {
   return request<void>(`/entries/${id}`, { method: "DELETE" });
 }
 
-export async function downloadEntriesCsv(): Promise<void> {
+const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS as string | undefined)?.split(",") ?? [
+  "ollioxenhomefree@gmail.com",
+];
+
+export function isAdminEmail(email: string | undefined): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return ADMIN_EMAILS.map((e) => e.trim().toLowerCase()).includes(normalized);
+}
+
+async function downloadCsv(path: string, filename: string): Promise<void> {
   if (!apiUrl) {
     throw new Error("VITE_API_URL is not configured");
   }
   const headers = await authHeaders();
-  const res = await fetch(`${apiUrl}/export.csv`, { headers });
+  const res = await fetch(`${apiUrl}${path}`, { headers });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error((data as { error?: string }).error || `Download failed (${res.status})`);
@@ -145,9 +155,17 @@ export async function downloadEntriesCsv(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "treattracker-entries.csv";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+export function downloadEntriesCsv(): Promise<void> {
+  return downloadCsv("/export.csv", "treattracker-entries.csv");
+}
+
+export function downloadAllEntriesCsv(): Promise<void> {
+  return downloadCsv("/admin/export.csv", "treattracker-all-entries.csv");
 }

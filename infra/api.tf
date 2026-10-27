@@ -62,6 +62,14 @@ resource "aws_apigatewayv2_route" "export_csv" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
+resource "aws_apigatewayv2_route" "admin_export_csv" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "GET /admin/export.csv"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
 resource "aws_apigatewayv2_route" "lights_on" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "POST /house/lights-on"
